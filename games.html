@@ -1,9 +1,169 @@
-{% extends 'base.html' %}
-{% block content %}
-  <h2>Games</h2>
-  <ul>
-    {% for g in games %}
-      <li>{{ g.id }} - files: {{ g.files|join(', ') }} - <a href="/run/{{ g.id }}">Run</a></li>
-    {% endfor %}
-  </ul>
-{% endblock %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Games | DevHub Studio</title>
+<style>
+  body {
+    margin: 0;
+    background: #0d1117;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    color: #fff;
+    font-family: "Inter", sans-serif;
+  }
+
+  canvas {
+    background: #111;
+    border: 2px solid #0078ff;
+    margin-top: 20px;
+  }
+
+  #score-board {
+    margin-top: 20px;
+    font-size: 1.2rem;
+    font-weight: bold;
+  }
+
+  #skins {
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+  }
+
+  .skin {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #0078ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+</style>
+</head>
+<body>
+
+<h2>Cass Hammer: Asteroid Blaster</h2>
+<div id="score-board">Score: 0</div>
+<div id="skins">
+  <div class="skin" style="background:red;" data-color="red"></div>
+  <div class="skin" style="background:green;" data-color="green"></div>
+  <div class="skin" style="background:blue;" data-color="blue"></div>
+</div>
+<canvas id="gameCanvas" width="600" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+let score = 0;
+const scoreBoard = document.getElementById("score-board");
+let playerColor = "red";
+
+// Player
+const player = { x: 300, y: 350, radius: 20, speed: 5, bullets: [] };
+
+// Asteroids
+let asteroids = [];
+let asteroidSpeed = 2;
+
+// Controls
+const keys = {};
+
+// Skins
+document.querySelectorAll(".skin").forEach(skin => {
+  skin.addEventListener("click", () => {
+    playerColor = skin.dataset.color;
+  });
+});
+
+// Event listeners
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+
+// Spawn asteroids
+function spawnAsteroid() {
+  const size = Math.random() * 20 + 10;
+  const x = Math.random() * (canvas.width - size * 2) + size;
+  asteroids.push({ x, y: -size, radius: size });
+}
+
+// Shoot bullets
+function shoot() {
+  player.bullets.push({ x: player.x, y: player.y - player.radius, radius: 5, speed: 7 });
+}
+
+// Game loop
+function update() {
+  // Clear
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Move player
+  if(keys["ArrowLeft"] && player.x - player.radius > 0) player.x -= player.speed;
+  if(keys["ArrowRight"] && player.x + player.radius < canvas.width) player.x += player.speed;
+  if(keys[" "] || keys["ArrowUp"]) shoot();
+
+  // Draw player
+  ctx.fillStyle = playerColor;
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2);
+  ctx.fill();
+
+  // Move bullets
+  player.bullets.forEach((b, i) => {
+    b.y -= b.speed;
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.radius, 0, Math.PI*2);
+    ctx.fill();
+
+    // Remove offscreen bullets
+    if(b.y < 0) player.bullets.splice(i,1);
+  });
+
+  // Move asteroids
+  asteroids.forEach((a, ai) => {
+    a.y += asteroidSpeed;
+    ctx.fillStyle = "gray";
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, a.radius, 0, Math.PI*2);
+    ctx.fill();
+
+    // Collision with bullets
+    player.bullets.forEach((b, bi) => {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      if(Math.sqrt(dx*dx + dy*dy) < a.radius + b.radius) {
+        // Destroy asteroid
+        asteroids.splice(ai, 1);
+        player.bullets.splice(bi,1);
+        score += 10;
+        scoreBoard.textContent = `Score: ${score}`;
+      }
+    });
+
+    // Game over if asteroid reaches bottom
+    if(a.y + a.radius > canvas.height) {
+      alert(`Game Over! Your Score: ${score}`);
+      score = 0;
+      scoreBoard.textContent = `Score: ${score}`;
+      asteroids = [];
+    }
+  });
+
+  requestAnimationFrame(update);
+}
+
+// Spawn asteroids periodically
+setInterval(spawnAsteroid, 1000);
+
+update();
+</script>
+
+</body>
+</html>
