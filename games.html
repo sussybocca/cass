@@ -19,8 +19,8 @@
     border: 2px solid #0078ff;
     margin-top: 20px;
   }
-  #score-board {
-    margin-top: 20px;
+  #score-board, #timer {
+    margin-top: 10px;
     font-size: 1.2rem;
     font-weight: bold;
   }
@@ -45,6 +45,7 @@
 
 <h2>Cass Hammer: Asteroid Blaster</h2>
 <div id="score-board">Score: 0</div>
+<div id="timer">Time: 1:00</div>
 <div id="skins">
   <div class="skin" style="background:red;" data-color="red"></div>
   <div class="skin" style="background:green;" data-color="green"></div>
@@ -59,8 +60,10 @@ const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 let score = 0;
 const scoreBoard = document.getElementById("score-board");
+const timerEl = document.getElementById("timer");
 let playerColor = "red";
-let unlockedSkins = ["red"]; // unlock by score
+let unlockedSkins = ["red"];
+let gameOver = false;
 
 // Player
 const player = { x: 300, y: 350, radius: 20, speed: 5, bullets: [] };
@@ -69,6 +72,7 @@ const player = { x: 300, y: 350, radius: 20, speed: 5, bullets: [] };
 let asteroids = [];
 let asteroidSpeed = 2;
 let spawnInterval = 1200;
+let asteroidSpawner;
 
 // Explosions
 let explosions = [];
@@ -97,24 +101,26 @@ document.addEventListener("keyup", e => keys[e.key] = false);
 
 // Shooting
 function shoot() {
+  if(gameOver) return;
   if (keys[" "] || keys["ArrowUp"]) {
     if (!player.shootCooldown) {
       player.bullets.push({ x: player.x, y: player.y - player.radius, radius: 5, speed: 7 });
       shootSound.currentTime = 0;
       shootSound.play();
       player.shootCooldown = true;
-      setTimeout(() => player.shootCooldown = false, 300); // 0.3s cooldown
+      setTimeout(() => player.shootCooldown = false, 300);
     }
   }
 }
 
 // Spawn asteroids
 function spawnAsteroid() {
+  if(gameOver) return;
   const typeRand = Math.random();
   let radius;
-  if(typeRand < 0.5) radius = 15;       // small
-  else if(typeRand < 0.85) radius = 25; // medium
-  else radius = 40;                      // large
+  if(typeRand < 0.5) radius = 15;
+  else if(typeRand < 0.85) radius = 25;
+  else radius = 40;
 
   const x = Math.random() * (canvas.width - radius*2) + radius;
   asteroids.push({ x, y: -radius, radius });
@@ -129,6 +135,8 @@ function addExplosion(x,y) {
 
 // Game Loop
 function update() {
+  if(gameOver) return;
+
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   // Move player
@@ -157,10 +165,10 @@ function update() {
     a.y += asteroidSpeed;
     ctx.fillStyle = "gray";
     ctx.beginPath();
-    ctx.arc(a.x, a.y, a.radius, 0, Math.PI*2);
+    ctx.arc(a.x, a.y, a.radius,0,Math.PI*2);
     ctx.fill();
 
-    // Collision with bullets
+    // Bullet collision
     player.bullets.forEach((b, bi) => {
       const dx = a.x - b.x;
       const dy = a.y - b.y;
@@ -168,9 +176,8 @@ function update() {
         addExplosion(a.x, a.y);
         asteroids.splice(ai,1);
         player.bullets.splice(bi,1);
-        score += Math.floor(a.radius); // bigger asteroids = more points
+        score += Math.floor(a.radius);
         scoreBoard.textContent = `Score: ${score}`;
-
         // Unlock skins
         if(score >= 50 && !unlockedSkins.includes("green")) unlockedSkins.push("green");
         if(score >= 100 && !unlockedSkins.includes("blue")) unlockedSkins.push("blue");
@@ -178,12 +185,9 @@ function update() {
       }
     });
 
-    // Game over
+    // Game over if asteroid reaches bottom
     if(a.y + a.radius > canvas.height) {
-      alert(`Game Over! Score: ${score}`);
-      score = 0;
-      scoreBoard.textContent = `Score: ${score}`;
-      asteroids = [];
+      gameOver = true;
     }
   });
 
@@ -197,12 +201,29 @@ function update() {
     if(exp.radius >= exp.max) explosions.splice(ei,1);
   });
 
-  requestAnimationFrame(update);
+  if(!gameOver) requestAnimationFrame(update);
 }
 
-// Start game
-setInterval(spawnAsteroid, spawnInterval);
+// Timer
+let timeLeft = 60; // seconds
+function countdown() {
+  if(timeLeft <= 0) {
+    gameOver = true;
+    clearInterval(asteroidSpawner);
+    alert(`Time's up! Final Score: ${score}`);
+    return;
+  }
+  let minutes = Math.floor(timeLeft/60);
+  let seconds = timeLeft % 60;
+  timerEl.textContent = `Time: ${minutes}:${seconds < 10 ? "0"+seconds : seconds}`;
+  timeLeft--;
+}
+
+// Start
+asteroidSpawner = setInterval(spawnAsteroid, spawnInterval);
+setInterval(countdown, 1000);
 update();
 </script>
+
 </body>
 </html>
