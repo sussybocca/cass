@@ -8,32 +8,27 @@
   body {
     margin: 0;
     background: #0d1117;
+    color: #fff;
+    font-family: "Inter", sans-serif;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
-    color: #fff;
-    font-family: "Inter", sans-serif;
   }
-
   canvas {
     background: #111;
     border: 2px solid #0078ff;
     margin-top: 20px;
   }
-
   #score-board {
     margin-top: 20px;
     font-size: 1.2rem;
     font-weight: bold;
   }
-
   #skins {
     margin-top: 10px;
     display: flex;
     gap: 10px;
   }
-
   .skin {
     width: 40px;
     height: 40px;
@@ -54,16 +49,18 @@
   <div class="skin" style="background:red;" data-color="red"></div>
   <div class="skin" style="background:green;" data-color="green"></div>
   <div class="skin" style="background:blue;" data-color="blue"></div>
+  <div class="skin" style="background:yellow;" data-color="yellow"></div>
 </div>
 <canvas id="gameCanvas" width="600" height="400"></canvas>
 
 <script>
+// Setup
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
-
 let score = 0;
 const scoreBoard = document.getElementById("score-board");
 let playerColor = "red";
+let unlockedSkins = ["red"]; // unlock by score
 
 // Player
 const player = { x: 300, y: 350, radius: 20, speed: 5, bullets: [] };
@@ -71,42 +68,73 @@ const player = { x: 300, y: 350, radius: 20, speed: 5, bullets: [] };
 // Asteroids
 let asteroids = [];
 let asteroidSpeed = 2;
+let spawnInterval = 1200;
+
+// Explosions
+let explosions = [];
 
 // Controls
 const keys = {};
 
-// Skins
+// Sounds
+const shootSound = new Audio("https://freesound.org/data/previews/320/320181_5260877-lq.mp3");
+const explosionSound = new Audio("https://freesound.org/data/previews/178/178186_3248244-lq.mp3");
+
+// Skins selection
 document.querySelectorAll(".skin").forEach(skin => {
   skin.addEventListener("click", () => {
-    playerColor = skin.dataset.color;
+    if (unlockedSkins.includes(skin.dataset.color)) {
+      playerColor = skin.dataset.color;
+    } else {
+      alert("This skin is locked! Earn points to unlock.");
+    }
   });
 });
 
-// Event listeners
+// Controls
 document.addEventListener("keydown", e => keys[e.key] = true);
 document.addEventListener("keyup", e => keys[e.key] = false);
 
+// Shooting
+function shoot() {
+  if (keys[" "] || keys["ArrowUp"]) {
+    if (!player.shootCooldown) {
+      player.bullets.push({ x: player.x, y: player.y - player.radius, radius: 5, speed: 7 });
+      shootSound.currentTime = 0;
+      shootSound.play();
+      player.shootCooldown = true;
+      setTimeout(() => player.shootCooldown = false, 300); // 0.3s cooldown
+    }
+  }
+}
+
 // Spawn asteroids
 function spawnAsteroid() {
-  const size = Math.random() * 20 + 10;
-  const x = Math.random() * (canvas.width - size * 2) + size;
-  asteroids.push({ x, y: -size, radius: size });
+  const typeRand = Math.random();
+  let radius;
+  if(typeRand < 0.5) radius = 15;       // small
+  else if(typeRand < 0.85) radius = 25; // medium
+  else radius = 40;                      // large
+
+  const x = Math.random() * (canvas.width - radius*2) + radius;
+  asteroids.push({ x, y: -radius, radius });
 }
 
-// Shoot bullets
-function shoot() {
-  player.bullets.push({ x: player.x, y: player.y - player.radius, radius: 5, speed: 7 });
+// Explosions
+function addExplosion(x,y) {
+  explosions.push({ x, y, radius: 0, max: 30 });
+  explosionSound.currentTime = 0;
+  explosionSound.play();
 }
 
-// Game loop
+// Game Loop
 function update() {
-  // Clear
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
   // Move player
   if(keys["ArrowLeft"] && player.x - player.radius > 0) player.x -= player.speed;
   if(keys["ArrowRight"] && player.x + player.radius < canvas.width) player.x += player.speed;
-  if(keys[" "] || keys["ArrowUp"]) shoot();
+  shoot();
 
   // Draw player
   ctx.fillStyle = playerColor;
@@ -114,19 +142,17 @@ function update() {
   ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2);
   ctx.fill();
 
-  // Move bullets
-  player.bullets.forEach((b, i) => {
+  // Bullets
+  player.bullets.forEach((b, bi) => {
     b.y -= b.speed;
     ctx.fillStyle = "#fff";
     ctx.beginPath();
-    ctx.arc(b.x, b.y, b.radius, 0, Math.PI*2);
+    ctx.arc(b.x, b.y, b.radius,0,Math.PI*2);
     ctx.fill();
-
-    // Remove offscreen bullets
-    if(b.y < 0) player.bullets.splice(i,1);
+    if(b.y < 0) player.bullets.splice(bi,1);
   });
 
-  // Move asteroids
+  // Asteroids
   asteroids.forEach((a, ai) => {
     a.y += asteroidSpeed;
     ctx.fillStyle = "gray";
@@ -139,31 +165,44 @@ function update() {
       const dx = a.x - b.x;
       const dy = a.y - b.y;
       if(Math.sqrt(dx*dx + dy*dy) < a.radius + b.radius) {
-        // Destroy asteroid
-        asteroids.splice(ai, 1);
+        addExplosion(a.x, a.y);
+        asteroids.splice(ai,1);
         player.bullets.splice(bi,1);
-        score += 10;
+        score += Math.floor(a.radius); // bigger asteroids = more points
         scoreBoard.textContent = `Score: ${score}`;
+
+        // Unlock skins
+        if(score >= 50 && !unlockedSkins.includes("green")) unlockedSkins.push("green");
+        if(score >= 100 && !unlockedSkins.includes("blue")) unlockedSkins.push("blue");
+        if(score >= 200 && !unlockedSkins.includes("yellow")) unlockedSkins.push("yellow");
       }
     });
 
-    // Game over if asteroid reaches bottom
+    // Game over
     if(a.y + a.radius > canvas.height) {
-      alert(`Game Over! Your Score: ${score}`);
+      alert(`Game Over! Score: ${score}`);
       score = 0;
       scoreBoard.textContent = `Score: ${score}`;
       asteroids = [];
     }
   });
 
+  // Explosions
+  explosions.forEach((exp, ei) => {
+    ctx.fillStyle = `rgba(255,255,0,${1-exp.radius/exp.max})`;
+    ctx.beginPath();
+    ctx.arc(exp.x, exp.y, exp.radius,0,Math.PI*2);
+    ctx.fill();
+    exp.radius += 2;
+    if(exp.radius >= exp.max) explosions.splice(ei,1);
+  });
+
   requestAnimationFrame(update);
 }
 
-// Spawn asteroids periodically
-setInterval(spawnAsteroid, 1000);
-
+// Start game
+setInterval(spawnAsteroid, spawnInterval);
 update();
 </script>
-
 </body>
 </html>
